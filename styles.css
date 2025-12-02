@@ -1,0 +1,429 @@
+/* styles.css - visually matches the provided mockup proportions */
+:root {
+    --plugin-w: 1280px;
+    --plugin-h: 960px;
+    --bg: #1f1f1f;
+    --panel: #2a2a2a;
+    --muted: #6f6f6f;
+    --accent: #2f9ff5;
+    --accent-2: #ff9f2f;
+    --text: #e6e6e6;
+    
+    --col1: 38.29;
+    --col2: 37.60;
+    --col3: 24.12;
+    --row1: 66.84;
+    --row2: 33.16;
+}
+
+/* Reset and base styles */
+* {
+    box-sizing: border-box;
+}
+
+/* Modal container */
+.graph-view-modal {
+    overflow: hidden;
+    width: var(--plugin-w);
+    height: var(--plugin-h);
+    flex-direction: row;
+    border: 0cm;
+    padding: 0%;
+}
+
+.graph-view-modal .modal-close-button {
+    display: none;
+}
+
+.graph-view-modal .modal-content {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    grid-template-columns: 38.29% 37.60% 24.12%;
+    grid-template-rows: 66.84% 33.16%;
+    position: relative;
+    background: linear-gradient(180deg, var(--panel), #222);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-radius: 6px;
+}
+
+.graph-view-modal-grid {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    grid-template-columns: calc(var(--col1) * 1%) calc(var(--col2) * 1%) calc(var(--col3) * 1%);
+    grid-template-rows: calc(var(--row1) * 1%) calc(var(--row2) * 1%);
+    position: relative;
+}
+
+/* Resize handles */
+.resize-h-1 {
+    position: absolute;
+    top: calc(var(--row1) * 1% - 3px);
+    left: 0;
+    width: calc((var(--col1) + var(--col2)) * 1%);
+    height: 6px;
+    cursor: row-resize;
+    background: rgba(255,255,255,0.06);
+    z-index: 50;
+}
+
+.resize-v-1,
+.resize-v-2 {
+    position: absolute;
+    width: 6px;
+    cursor: col-resize;
+    background: rgba(255,255,255,0.06);
+    z-index: 50;
+}
+
+.resize-v-1 {
+    left: calc(var(--col1) * 1% - 3px);
+    top: calc(var(--row1) * 1%);
+    height: calc(var(--row2) * 1%);
+}
+
+.resize-v-2 {
+    left: calc((var(--col1) + var(--col2)) * 1% - 3px);
+    top: 0;
+    height: 100%;
+}
+
+.resize-h-1:hover,
+.resize-v-1:hover,
+.resize-v-2:hover {
+    background: var(--color-accent);
+    box-shadow: 0 0 8px var(--accent);
+}
+
+/* Graph view area */
+.graph-view {
+    grid-area: 1 / 1 / 2 / 3;
+    background: #0f0f10;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    overflow: auto;
+    position: relative;
+}
+
+.graph-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Graph controls */
+.graph-view-modal  .graph-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 100;
+    display: flex;
+    gap: 5px;
+}
+
+.graph-view-modal  .graph-controls button {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.graph-view-modal  .graph-controls button:hover {
+    background: var(--background-modifier-hover);
+}
+
+.graph-view-modal  .graph-settings-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 101;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.graph-view-modal  .graph-settings {
+    position: absolute;
+    top: 50px;
+    right: 10px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 10px;
+    z-index: 100;
+    max-width: 250px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.graph-view-modal  .graph-settings.hidden {
+    display: none;
+}
+
+/* Tags panel */
+.tags-panel {
+    grid-area: 2 / 1 / 3 / 2;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 12px;
+    border-radius: 4px;
+}
+
+.tags-panel .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.tags-panel .controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.tags-panel .controls .search {
+    width: 160px;
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text);
+}
+
+.tag-list {
+    list-style: none;
+    padding: 6px;
+    margin: 0;
+    overflow: auto;
+}
+
+/* Tag items */
+.tag-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.02);
+    transition: background 0.2s ease;
+}
+
+.tag-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tag-item.selected {
+    background: var(--interactive-accent);
+}
+
+.tag-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin-right: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+}
+
+.tag-name {
+    flex: 1;
+    font-size: 12px;
+}
+
+.tag-count {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* Color options */
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.color-option {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.color-option.selected {
+    border-color: white;
+}
+
+.custom-color-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+/* LLM panel */
+.llm-panel {
+    grid-area: 2 / 2 / 3 / 3;
+    background: transparent;
+    border: 1px dashed rgba(255, 255, 255, 0.03);
+    padding: 12px;
+    border-radius: 4px;
+}
+
+.llm-panel .panel-header {
+    margin-bottom: 8px;
+}
+
+.llm-content {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Vault tree */
+.vault-tree-container {
+    grid-area: 1 / 3 / 3 / 4;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    min-width: 0;
+}
+
+.vault-tree-container > * {
+    width: 100%;
+    min-width: 0;
+}
+
+.vault-header {
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: transparent;
+}
+
+.vault-title {
+    font-weight: 600;
+}
+
+.vault-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.vault-controls .search {
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text);
+}
+
+.vault-browser {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    overflow: auto;
+    padding: 12px;
+    border-radius: 4px;
+}
+
+.file-tree {
+    list-style: none;
+    padding-left: 12px;
+    margin: 0;
+}
+
+.file-tree li {
+    padding: 6px 0;
+}
+
+.file-tree ul {
+    margin-left: 1.2em;
+}
+
+/* File and folder styles */
+.file-node {
+    padding: 2px 4px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.file-row, .folder-header {
+    cursor: pointer;
+    display: flex;
+}
+
+.file-row.selected, 
+.folder-header.selected {
+    background: var(--interactive-accent-hover);
+    color: white;
+}
+
+.folder-header:hover, .file-row:hover {
+    background: var(--background-modifier-hover);
+}
+
+.vault-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 8px;
+}
+
+/* Buttons */
+.btn {
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.btn.primary {
+    background: linear-gradient(180deg, var(--accent), #1f7fd6);
+    border: none;
+}
+
+.btn.ghost {
+    background: transparent;
+    opacity: 0.8;
+}
+
+/* Color classes for tags and nodes */
+.tag-color-1, .graph-node.tag-color-1 { fill: #ff6b6b; background: #ff6b6b; }
+.tag-color-2, .graph-node.tag-color-2 { fill: #4ecdc4; background: #4ecdc4; }
+.tag-color-3, .graph-node.tag-color-3 { fill: #45b7d1; background: #45b7d1; }
+.tag-color-4, .graph-node.tag-color-4 { fill: #96ceb4; background: #96ceb4; }
+.tag-color-5, .graph-node.tag-color-5 { fill: #feca57; background: #feca57; }
+.tag-color-6, .graph-node.tag-color-6 { fill: #ff9ff3; background: #ff9ff3; }
+.tag-color-7, .graph-node.tag-color-7 { fill: #54a0ff; background: #54a0ff; }
+.tag-color-8, .graph-node.tag-color-8 { fill: #5f27cd; background: #5f27cd; }
+.tag-color-9, .graph-node.tag-color-9 { fill: #00d2d3; background: #00d2d3; }
+.tag-color-10, .graph-node.tag-color-10 { fill: #ff9f43; background: #ff9f43; }
+
+.random-color-1 { fill: #a29bfe; }
+.random-color-2 { fill: #fd79a8; }
+.random-color-3 { fill: #fdcb6e; }
+.random-color-4 { fill: #e17055; }
+.random-color-5 { fill: #00b894; }
+
+.graph-tag-node {
+    stroke-width: 3px;
+}

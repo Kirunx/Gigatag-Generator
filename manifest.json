@@ -1,0 +1,11 @@
+{
+	"id": "gigachat-tag-generator",
+	"name": "GigaTagGenerator",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "does something useful or not.",
+	"author": "KirunX",
+	"authorUrl": "",
+	"fundingUrl": "",
+	"isDesktopOnly": true
+}
