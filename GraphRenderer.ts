@@ -68,16 +68,24 @@ export class GraphRenderer {
     private showSettings = true;
     private tagColorIndex = 1;
     private randomColorIndex = 1;
-
     constructor(
         private container: HTMLElement,
         data: Record<string, FileSummary>,
         selectedFiles: Set<string>,
+        tags: Map<string, GraphTag>,
+        settings?: Partial<GraphSettings>, // Add optional settings parameter
         onNodeClick?: (node: GraphNode) => void
     ) {
         this.allData = data;
         this.selectedNodes = selectedFiles;
+        this.tags = tags;
         this.onNodeClick = onNodeClick;
+        
+        // Apply custom settings if provided
+        if (settings) {
+            this.settings = { ...this.settings, ...settings };
+        }
+        
         this.initializeGraph();
     }
 
@@ -87,10 +95,14 @@ export class GraphRenderer {
         this.updateGraphElements();
         this.restartSimulation();
     }
-
+    public updateTags(tags: Map<string, GraphTag>) {
+        this.tags = tags;
+        this.generateGraphData();
+        this.updateGraphElements();
+        this.restartSimulation();
+    }
     public updateData(data: Record<string, FileSummary>) {
         this.allData = data;
-        this.extractTags(); // Re-extract tags when data updates
         this.generateGraphData();
         this.updateGraphElements();
         this.restartSimulation();
@@ -99,11 +111,6 @@ export class GraphRenderer {
     private initializeGraph() {
         // Create tooltip
         this.tooltip = this.container.createDiv({ cls: 'graph-tooltip' });
-
-        // Create settings toggle button
-        const toggleBtn = this.container.createDiv({ cls: 'graph-settings-toggle' });
-        toggleBtn.setText('⚙️');
-        toggleBtn.onclick = () => this.toggleSettings();
 
         // Get container dimensions
         const containerRect = this.container.getBoundingClientRect();
@@ -123,9 +130,7 @@ export class GraphRenderer {
 
         this.graphG = this.graphSvg.append('g');
 
-        // Extract tags from data
-        this.extractTags();
-
+        console.log(`Graph initialized with ${this.tags.size} tags`);
         // Generate initial graph data
         this.generateGraphData();
 
@@ -138,56 +143,22 @@ export class GraphRenderer {
         // Update graph on resize
         this.setupResizeObserver();
     }
-    
-    private extractTags() {
-        this.tags.clear();
-        this.tagColorIndex = 1;
-    
-        Object.entries(this.allData).forEach(([path, fileSummary]) => {
-            // More inclusive regex that captures most characters used in tags
-            // This matches # followed by any non-whitespace characters (except # and [])
-            const tagMatches = fileSummary.content.matchAll(/#([^\s#\[\]]+)/g);
-            
-            for (const match of tagMatches) {
-                let tagName = match[1].trim();
-                
-                // Remove common punctuation that might be at the end of tags
-                tagName = tagName.replace(/[.,;!?]*$/, '');
-                
-                if (tagName && tagName.length > 0) {
-                    // Skip if it's obviously not a tag (like numbers only)
-                    if (/^\d+$/.test(tagName)) continue;
-                    
-                    if (!this.tags.has(tagName)) {
-                        const tag: GraphTag = {
-                            name: tagName,
-                            color: `tag-color-${this.tagColorIndex}`,
-                            files: new Set()
-                        };
-                        this.tags.set(tagName, tag);
-                        this.tagColorIndex = (this.tagColorIndex % 10) + 1;
-                    }
-                    this.tags.get(tagName)!.files.add(path);
-                }
-            }
-        });
-    
-        console.log(`Extracted ${this.tags.size} tags:`, Array.from(this.tags.keys()));
-    }
+
+
     public getTagsForSelectedNodes(): Map<string, GraphTag> {
         const relevantTags = new Map<string, GraphTag>();
-        
+
         this.tags.forEach((tag, tagName) => {
             // Check if any file with this tag is selected
-            const hasSelectedFile = Array.from(tag.files).some(filePath => 
+            const hasSelectedFile = Array.from(tag.files).some(filePath =>
                 this.selectedNodes.has(filePath)
             );
-            
+
             if (hasSelectedFile) {
                 relevantTags.set(tagName, tag);
             }
         });
-        
+
         return relevantTags;
     }
 
@@ -218,128 +189,177 @@ export class GraphRenderer {
         }
 
         const nodeMap = new Map<string, GraphNode>();
-        const fileTags = new Map<string, string[]>(); // file path -> array of tags
+        const fileTags = new Map<string, Set<string>>();
+        const tagGroups = new Map<string, string[]>();
+        const untaggedFiles: string[] = [];
 
-        // Create nodes only for selected files and extract their tags
-        Object.entries(this.allData).forEach(([path, fileSummary]) => {
-            const isSelected = this.selectedNodes.has(path) ||
-                this.selectedNodes.has(fileSummary.file) ||
-                this.selectedNodes.has(path.replace(/\.md$/, ''));
+        // First pass: collect tags for selected files
+        Array.from(this.selectedNodes).forEach(path => {
+            const fileSummary = this.allData[path];
+            if (!fileSummary) return;
 
-            if (isSelected) {
-                // Extract tags for this file
-                const fileTagMatches = fileSummary.content.matchAll(/#(\w+)/g);
-                const tags: string[] = [];
-                for (const match of fileTagMatches) {
-                    tags.push(match[1]);
+            // Get tags for this file from the tag manager
+            const tags = new Set<string>();
+
+            // Check which tags include this file from our tag map
+            this.tags.forEach((tag, tagName) => {
+                if (tag.files.has(path)) {
+                    tags.add(tagName);
+
+                    if (!tagGroups.has(tagName)) {
+                        tagGroups.set(tagName, []);
+                    }
+                    tagGroups.get(tagName)!.push(path);
                 }
-                fileTags.set(path, tags);
+            });
 
-                // Determine node color based on tags
-                let nodeColor = '';
-                if (tags.length > 0 && this.settings.showTagConnections) {
-                    // Use the color of the first tag
-                    const firstTag = this.tags.get(tags[0]);
-                    nodeColor = firstTag ? firstTag.color : `random-color-${this.randomColorIndex}`;
-                } else {
-                    nodeColor = `random-color-${this.randomColorIndex}`;
-                    this.randomColorIndex = (this.randomColorIndex % 5) + 1;
-                }
+            fileTags.set(path, tags);
 
-                const node: GraphNode = {
-                    id: fileSummary.file,
-                    name: fileSummary.file,
-                    path: path,
-                    radius: 8,
-                    isSelected: true,
-                    color: nodeColor
-                };
-                this.nodes.push(node);
-                nodeMap.set(fileSummary.file, node);
-                nodeMap.set(path, node);
+            if (tags.size === 0) {
+                untaggedFiles.push(path);
             }
         });
 
-        console.log(`Created ${this.nodes.length} nodes for selected files`);
+        const untaggedGroups = this.createUntaggedGroups(untaggedFiles);
 
-        // Create links between selected files (existing wiki links)
-        Object.entries(this.allData).forEach(([path, fileSummary]) => {
-            const isSourceSelected = this.selectedNodes.has(path) ||
-                this.selectedNodes.has(fileSummary.file) ||
-                this.selectedNodes.has(path.replace(/\.md$/, ''));
+        // Create nodes with proper colors
+        Array.from(this.selectedNodes).forEach(path => {
+            const fileSummary = this.allData[path];
+            if (!fileSummary) return;
 
-            if (isSourceSelected) {
-                const sourceNode = nodeMap.get(fileSummary.file) || nodeMap.get(path);
-                if (!sourceNode) return;
+            // Determine node color
+            let nodeColor = '';
+            const tags = fileTags.get(path) || new Set();
 
-                // Regular wiki links
-                fileSummary.links.forEach(link => {
-                    const normalizedLink = link.replace(/\.md$/, '');
-                    const targetEntry = Object.entries(this.allData).find(([targetPath, targetFile]) => {
-                        return targetFile.file === normalizedLink ||
-                            targetPath === normalizedLink ||
-                            targetPath.replace(/\.md$/, '') === normalizedLink;
-                    });
+            if (tags.size > 0) {
+                // Use color of the most common tag among selected files
+                const sortedTags = Array.from(tags).sort((a, b) => {
+                    const aCount = tagGroups.get(a)?.length || 0;
+                    const bCount = tagGroups.get(b)?.length || 0;
+                    return bCount - aCount;
+                });
 
-                    if (targetEntry) {
-                        const [targetPath, targetFile] = targetEntry;
-                        const isTargetSelected = this.selectedNodes.has(targetPath) ||
-                            this.selectedNodes.has(targetFile.file) ||
-                            this.selectedNodes.has(targetPath.replace(/\.md$/, ''));
+                if (sortedTags.length > 0) {
+                    const primaryTag = this.tags.get(sortedTags[0]);
+                    nodeColor = primaryTag ? primaryTag.color : `untagged-group-1`;
+                } else {
+                    nodeColor = `untagged-group-1`;
+                }
+            } else {
+                // Check which untagged group this file belongs to
+                let groupFound = false;
+                untaggedGroups.forEach((files, groupId) => {
+                    if (files.includes(path)) {
+                        nodeColor = `untagged-group-${groupId}`;
+                        groupFound = true;
+                    }
+                });
+                if (!groupFound) {
+                    nodeColor = `untagged-group-1`;
+                }
+            }
 
-                        if (isTargetSelected) {
-                            const targetNode = nodeMap.get(targetFile.file) || nodeMap.get(targetPath);
-                            if (targetNode && sourceNode.id !== targetNode.id) {
-                                const linkExists = this.links.some(l =>
-                                    (l.source.id === sourceNode.id && l.target.id === targetNode.id) ||
-                                    (l.source.id === targetNode.id && l.target.id === sourceNode.id)
-                                );
+            const node: GraphNode = {
+                id: fileSummary.file,
+                name: fileSummary.file,
+                path: path,
+                radius: 12, // Increased radius for better visibility
+                isSelected: true,
+                color: nodeColor
+            };
+            this.nodes.push(node);
+            nodeMap.set(fileSummary.file, node);
+            nodeMap.set(path, node);
+        });
 
-                                if (!linkExists) {
-                                    this.links.push({
-                                        source: sourceNode,
-                                        target: targetNode,
-                                        type: 'wiki-link'
-                                    });
-                                }
+        console.log(`Created ${this.nodes.length} nodes: ${tagGroups.size} tagged groups, ${untaggedGroups.size} untagged groups`);
+
+        // Create links
+        Array.from(this.selectedNodes).forEach(path => {
+            const fileSummary = this.allData[path];
+            if (!fileSummary) return;
+
+            const sourceNode = nodeMap.get(fileSummary.file) || nodeMap.get(path);
+            if (!sourceNode) return;
+
+            // Regular wiki links
+            fileSummary.links.forEach(link => {
+                const normalizedLink = link.replace(/\.md$/, '');
+                const targetEntry = Object.entries(this.allData).find(([targetPath, targetFile]) => {
+                    return targetFile.file === normalizedLink ||
+                        targetPath === normalizedLink ||
+                        targetPath.replace(/\.md$/, '') === normalizedLink;
+                });
+
+                if (targetEntry) {
+                    const [targetPath, targetFile] = targetEntry;
+                    if (this.selectedNodes.has(targetPath)) {
+                        const targetNode = nodeMap.get(targetFile.file) || nodeMap.get(targetPath);
+                        if (targetNode && sourceNode.id !== targetNode.id) {
+                            const linkExists = this.links.some(l =>
+                                (l.source.id === sourceNode.id && l.target.id === targetNode.id) ||
+                                (l.source.id === targetNode.id && l.target.id === sourceNode.id)
+                            );
+
+                            if (!linkExists) {
+                                this.links.push({
+                                    source: sourceNode,
+                                    target: targetNode,
+                                    type: 'wiki-link'
+                                });
                             }
                         }
                     }
-                });
+                }
+            });
 
-                // Tag-based connections (if enabled)
-                if (this.settings.showTagConnections) {
-                    const sourceTags = fileTags.get(path) || [];
-                    sourceTags.forEach(tag => {
-                        const tagData = this.tags.get(tag);
-                        if (tagData) {
-                            tagData.files.forEach(targetPath => {
-                                if (targetPath !== path && this.selectedNodes.has(targetPath)) {
-                                    const targetNode = nodeMap.get(targetPath);
-                                    if (targetNode && sourceNode.id !== targetNode.id) {
-                                        const linkExists = this.links.some(l =>
-                                            (l.source.id === sourceNode.id && l.target.id === targetNode.id) ||
-                                            (l.source.id === targetNode.id && l.target.id === sourceNode.id)
-                                        );
+            // Tag-based connections (if enabled)
+            if (this.settings.showTagConnections) {
+                const tags = fileTags.get(path) || new Set();
+                tags.forEach(tag => {
+                    const tagData = this.tags.get(tag);
+                    if (tagData) {
+                        tagData.files.forEach(targetPath => {
+                            if (targetPath !== path && this.selectedNodes.has(targetPath)) {
+                                const targetNode = nodeMap.get(targetPath);
+                                if (targetNode && sourceNode.id !== targetNode.id) {
+                                    const linkExists = this.links.some(l =>
+                                        (l.source.id === sourceNode.id && l.target.id === targetNode.id) ||
+                                        (l.source.id === targetNode.id && l.target.id === sourceNode.id)
+                                    );
 
-                                        if (!linkExists) {
-                                            this.links.push({
-                                                source: sourceNode,
-                                                target: targetNode,
-                                                type: 'tag-link',
-                                                tag: tag
-                                            });
-                                        }
+                                    if (!linkExists) {
+                                        this.links.push({
+                                            source: sourceNode,
+                                            target: targetNode,
+                                            type: 'tag-link',
+                                            tag: tag
+                                        });
                                     }
                                 }
-                            });
-                        }
-                    });
-                }
+                            }
+                        });
+                    }
+                });
             }
         });
 
         console.log(`Generated graph with ${this.nodes.length} nodes and ${this.links.length} links`);
+    }
+
+    private createUntaggedGroups(untaggedFiles: string[]): Map<number, string[]> {
+        const groups = new Map<number, string[]>();
+        const groupSize = 3; // Group untagged files in sets of 3
+
+        for (let i = 0; i < untaggedFiles.length; i++) {
+            const groupId = Math.floor(i / groupSize) + 1;
+            if (!groups.has(groupId)) {
+                groups.set(groupId, []);
+            }
+            groups.get(groupId)!.push(untaggedFiles[i]);
+        }
+
+        return groups;
     }
 
     private initializeSimulation() {
@@ -395,8 +415,9 @@ export class GraphRenderer {
         // Remove existing elements
         this.graphG.selectAll('*').remove();
 
-        // Create links with different styles based on type
+        // Create links FIRST (so they appear behind nodes)
         this.linkElements = this.graphG.append('g')
+            .attr('class', 'links-container')
             .selectAll('line')
             .data(this.links)
             .enter()
@@ -413,15 +434,16 @@ export class GraphRenderer {
             .style('stroke-dasharray', (d: GraphLink) => d.type === 'tag-link' ? '5,5' : 'none')
             .style('stroke-opacity', 0.6);
 
-        // Create nodes with colors
+        // Create nodes AFTER links (so they appear on top)
         this.nodeElements = this.graphG.append('g')
+            .attr('class', 'nodes-container')
             .selectAll('circle')
             .data(this.nodes)
             .enter()
             .append('circle')
             .attr('class', (d: GraphNode) => `graph-node ${d.color}`)
             .attr('r', (d: GraphNode) => d.radius)
-            .style('fill', (d: GraphNode) => this.getNodeColor(d.color || ''))
+            // REMOVE this line: .style('fill', (d: GraphNode) => this.getNodeColor(d.color || ''))
             .style('cursor', 'pointer')
             .style('stroke', '#333')
             .style('stroke-width', 2)
@@ -429,8 +451,9 @@ export class GraphRenderer {
             .on('mouseover', (event, d) => this.showTooltip(event, d))
             .on('mouseout', () => this.hideTooltip());
 
-        // Create labels
+        // Create labels LAST (so they appear on top of everything)
         this.labelElements = this.graphG.append('g')
+            .attr('class', 'labels-container')
             .selectAll('text')
             .data(this.nodes)
             .enter()
@@ -438,15 +461,15 @@ export class GraphRenderer {
             .attr('class', 'graph-label')
             .text((d: GraphNode) => d.name)
             .attr('text-anchor', 'middle')
-            .attr('dy', -10)
+            .attr('dy', -15)
             .style('font-size', '12px')
             .style('pointer-events', 'none')
             .style('fill', '#333')
-            .style('font-weight', 'bold');
+            .style('font-weight', 'bold')
+            .style('text-shadow', '1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white');
 
         console.log('Graph elements created');
     }
-
     private getTagColor(colorClass: string): string {
         // Map color classes to actual colors
         const colorMap: { [key: string]: string } = {
@@ -466,16 +489,26 @@ export class GraphRenderer {
 
     private getNodeColor(colorClass: string): string {
         const colorMap: { [key: string]: string } = {
-            'random-color-1': '#a29bfe',
-            'random-color-2': '#fd79a8',
-            'random-color-3': '#fdcb6e',
-            'random-color-4': '#e17055',
-            'random-color-5': '#00b894',
-            ...this.getTagColorMap() // Include tag colors
+            // Tag colors
+            'tag-color-1': '#ff6b6b',
+            'tag-color-2': '#4ecdc4',
+            'tag-color-3': '#45b7d1',
+            'tag-color-4': '#96ceb4',
+            'tag-color-5': '#feca57',
+            'tag-color-6': '#ff9ff3',
+            'tag-color-7': '#54a0ff',
+            'tag-color-8': '#5f27cd',
+            'tag-color-9': '#00d2d3',
+            'tag-color-10': '#ff9f43',
+            // Untagged group colors (muted versions)
+            'untagged-group-1': '#8a8a8a',
+            'untagged-group-2': '#7c7c7c',
+            'untagged-group-3': '#6e6e6e',
+            'untagged-group-4': '#606060',
+            'untagged-group-5': '#525252'
         };
-        return colorMap[colorClass] || '#69b3a2';
+        return colorMap[colorClass] || '#8a8a8a';
     }
-
     private getTagColorMap(): { [key: string]: string } {
         return {
             'tag-color-1': '#ff6b6b',
@@ -544,21 +577,22 @@ export class GraphRenderer {
     private updateGraphElements() {
         console.log('Updating graph elements');
 
-        // Update nodes
+        // Update nodes - preserve color classes
         this.nodeElements = this.graphG.selectAll<SVGCircleElement, GraphNode>('circle')
             .data(this.nodes, (d: GraphNode) => d.id)
             .join(
                 enter => enter.append('circle')
-                    .attr('class', 'graph-node')
+                    .attr('class', (d: GraphNode) => `graph-node ${d.color}`)
                     .attr('r', (d: GraphNode) => d.radius)
-                    .style('fill', '#69b3a2')
+                    // REMOVE: .style('fill', '#69b3a2')
                     .style('cursor', 'pointer')
                     .style('stroke', '#333')
                     .style('stroke-width', 2)
                     .call(this.createDragBehavior())
                     .on('mouseover', (event, d) => this.showTooltip(event, d))
                     .on('mouseout', () => this.hideTooltip()),
-                update => update,
+                update => update
+                    .attr('class', (d: GraphNode) => `graph-node ${d.color}`), // Update class on existing nodes
                 exit => exit.remove()
             );
 
@@ -567,9 +601,16 @@ export class GraphRenderer {
             .data(this.links, (d: GraphLink) => `${d.source.id}-${d.target.id}`)
             .join(
                 enter => enter.append('line')
-                    .attr('class', 'graph-link')
-                    .style('stroke', '#999')
-                    .style('stroke-width', 2)
+                    .attr('class', (d: GraphLink) => `graph-link ${d.type}`)
+                    .style('stroke', (d: GraphLink) => {
+                        if (d.type === 'tag-link' && d.tag) {
+                            const tag = this.tags.get(d.tag);
+                            return tag ? this.getTagColor(tag.color) : '#999';
+                        }
+                        return '#999';
+                    })
+                    .style('stroke-width', (d: GraphLink) => d.type === 'tag-link' ? 1.5 : 2)
+                    .style('stroke-dasharray', (d: GraphLink) => d.type === 'tag-link' ? '5,5' : 'none')
                     .style('stroke-opacity', 0.6),
                 update => update,
                 exit => exit.remove()
